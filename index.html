@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title> SAI KIRAN Bittlu(IndexedDB)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+  <style>
+    :root{
+      --bg:#0f0f0f;--panel:#171717;--muted:#a3a3a3;--accent:#e50914;--accent-2:#4d79ff;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{margin:0;background:var(--bg);color:#fff;font-family:Inter,system-ui,Arial,sans-serif}
+
+    header{position:sticky;top:0;z-index:50;
+      background:linear-gradient(180deg,rgba(0,0,0,.8),rgba(0,0,0,.2));
+      backdrop-filter:blur(6px);
+      display:flex;gap:12px;align-items:center;justify-content:space-between;
+      padding:14px 16px;border-bottom:1px solid #1f1f1f}
+    .logo{font-weight:800;letter-spacing:.5px;color:var(--accent);text-decoration:none;font-size:20px}
+    .actions{display:flex;gap:8px;align-items:center}
+    .btn{border:none;background:#2a2a2a;color:#fff;padding:10px 14px;border-radius:10px;font-weight:600;cursor:pointer;transition:transform .03s ease,opacity .2s}
+    .btn:hover{opacity:.9}
+    .btn:active{transform:scale(.98)}
+    .btn-accent{background:var(--accent)}
+    .btn-blue{background:var(--accent-2)}
+    .pill{background:#1f1f1f;border:1px solid #2a2a2a;border-radius:12px;padding:8px 12px;color:#fff}
+    .pill input{all:unset;width:240px}
+
+    .wrap{max-width:1200px;margin:0 auto;padding:16px}
+    .hero{padding:24px 16px}
+    .muted{color:var(--muted)}
+
+    /* Responsive grid */
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      gap: 16px;
+    }
+
+    /* Card */
+    .card {
+      background: var(--panel);
+      border-radius: 12px;
+      overflow: hidden;
+      cursor: pointer;
+      transition: transform .25s ease, box-shadow .25s ease;
+      display:flex;flex-direction:column;
+    }
+    .card:hover {
+      transform: scale(1.03);
+      z-index: 5;
+      box-shadow: 0 6px 20px rgba(0,0,0,.6);
+    }
+
+    /* Thumbnail */
+    .thumb {
+      width: 100%;
+      aspect-ratio: 16/9;
+      background: #000;
+      background-size: cover;
+      background-position: center;
+    }
+
+    .meta { padding: 10px 12px; }
+    .title { font-size: 15px;font-weight:600;margin-bottom:4px; }
+    .sub { font-size: 12px;color: var(--muted); }
+
+    .center{display:flex;align-items:center;justify-content:center}
+
+    /* Modals */
+    .modal{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.7);z-index:60}
+    .sheet{width:min(520px,92vw);background:#111;border:1px solid #242424;border-radius:16px;padding:16px}
+    .sheet h3{margin:0 0 10px;font-size:18px}
+    .field{display:flex;flex-direction:column;gap:6px;margin:10px 0}
+    .field input{background:#1a1a1a;border:1px solid #2a2a2a;color:#fff;padding:10px;border-radius:10px}
+
+    .video-modal{position:fixed;inset:0;display:none;background:rgba(0,0,0,.92);z-index:70}
+    .video-wrap{width:min(1100px,96vw);margin:40px auto}
+    video{width:100%;background:#000;border-radius:12px}
+
+    .toolbar{display:flex;gap:8px;align-items:center}
+
+    .toast{position:fixed;bottom:16px;right:16px;background:#111;border:1px solid #2a2a2a;padding:10px 12px;border-radius:10px;opacity:0;transform:translateY(8px);transition:all .25s ease;z-index:80}
+    .toast.show{opacity:1;transform:none}
+
+    .divider{height:1px;background:#222;margin:10px 0}
+    .ghost{opacity:.6}
+    @media (max-width:520px){
+      .pill input{width:120px}
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <a class="logo" href="#">SAI KIRAN BITTLU</a>
+    <div class="actions">
+      <label class="pill" title="Search by title or category">
+        <i class="fa fa-search" style="margin-right:6px"></i>
+        <input id="searchInput" placeholder="Search videos..." autocomplete="off" />
+      </label>
+      <button id="uploadBtn" class="btn btn-accent" style="display:none">Upload</button>
+      <button id="loginBtn" class="btn btn-blue">Login</button>
+      <button id="logoutBtn" class="btn" style="display:none">Logout</button>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section class="hero">
+      <h2 style="margin:0 0 6px">Your Library</h2>
+      <div class="muted">Fast, scalable, offline-friendly. Powered by IndexedDB with thumbnails & lazy loading.</div>
+    </section>
+
+    <section id="results">
+      <div id="videoGrid" class="grid" aria-live="polite"></div>
+      <div id="loadMoreWrap" class="center" style="padding:14px">
+        <button id="loadMore" class="btn" style="display:none">Load more</button>
+        <div id="emptyState" class="muted" style="display:none; text-align:center; padding:40px;">
+          <i class="fa fa-video-slash" style="font-size:28px; margin-bottom:8px; display:block;"></i>
+          No videos found. Try uploading one!
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Upload Modal -->
+  <div id="uploadModal" class="modal" role="dialog" aria-modal="true" aria-hidden="true">
+    <div class="sheet">
+      <h3>Upload video</h3>
+      <div class="divider"></div>
+      <form id="uploadForm">
+        <div class="field"><label>Title</label><input id="videoTitle" required placeholder="My clip" /></div>
+        <div class="field"><label>Description</label><input id="videoDesc" placeholder="Optional" /></div>
+        <div class="field"><label>Category</label><input id="videoCat" placeholder="eg. Travel, Coding" /></div>
+        <div class="field"><label>Video file</label><input id="videoFile" type="file" accept="video/*" required /></div>
+        <div class="toolbar" style="justify-content:space-between; margin-top:6px">
+          <div class="muted" id="uploadHint">Thumbnails are generated locally for fast lists.</div>
+          <div>
+            <button type="button" class="btn" id="closeUpload">Cancel</button>
+            <button type="submit" class="btn btn-accent">Save</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Auth Modal -->
+  <div id="authModal" class="modal" role="dialog" aria-modal="true" aria-hidden="true">
+    <div class="sheet">
+      <h3 id="authTitle">Login</h3>
+      <div class="divider"></div>
+      <form id="authForm">
+        <div class="field"><label>Email</label><input id="authEmail" type="email" required /></div>
+        <div class="field"><label>Password</label><input id="authPass" type="password" required /></div>
+        <div class="toolbar" style="justify-content:space-between">
+          <button type="button" id="toggleMode" class="btn">Switch to Register</button>
+          <div>
+            <button type="button" class="btn" id="closeAuth">Cancel</button>
+            <button type="submit" class="btn btn-blue" id="authSubmit">Login</button>
+          </div>
+        </div>
+        <div class="muted" style="margin-top:8px">Admin (demo): <span class="ghost">sai@bittlu.com / bittlu123</span></div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Player Modal -->
+  <div id="playerModal" class="video-modal center" role="dialog" aria-modal="true" aria-hidden="true">
+    <div class="video-wrap"><video id="player" controls></video></div>
+  </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <!-- Icons (deferred) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/js/all.min.js" defer></script>
+
+  <script>
+  (function(){
+    // ======= Config & DB =======
+    const DB_NAME = 'flixnet_db_v2';
+    const DB_VERSION = 2;
+    const VIDEO_STORE = 'videos';
+    const USER_STORE = 'users';
+    let db = null;
+
+    async function openDB(){
+      return new Promise((resolve,reject)=>{
+        const req = indexedDB.open(DB_NAME, DB_VERSION);
+        req.onupgradeneeded = (e)=>{
+          const d = e.target.result;
+          if(!d.objectStoreNames.contains(VIDEO_STORE)){
+            const vs = d.createObjectStore(VIDEO_STORE, { keyPath:'id' });
+            vs.createIndex('title_lc','title_lc',{ unique:false });
+            vs.createIndex('category_lc','category_lc',{ unique:false });
+            vs.createIndex('uploader','uploader',{ unique:false });
+            vs.createIndex('createdAt','createdAt',{ unique:false });
+          } else {
+            // ensure indexes (for upgrades)
+            const tx = req.transaction;
+            const vs = tx.objectStore(VIDEO_STORE);
+            if(!vs.indexNames.contains('title_lc')) vs.createIndex('title_lc','title_lc',{unique:false});
+            if(!vs.indexNames.contains('category_lc')) vs.createIndex('category_lc','category_lc',{unique:false});
+            if(!vs.indexNames.contains('uploader')) vs.createIndex('uploader','uploader',{unique:false});
+            if(!vs.indexNames.contains('createdAt')) vs.createIndex('createdAt','createdAt',{unique:false});
+          }
+          if(!d.objectStoreNames.contains(USER_STORE)){
+            d.createObjectStore(USER_STORE, { keyPath:'email' });
+          }
+        };
+        req.onsuccess = ()=>{ db = req.result; resolve(db); };
+        req.onerror = ()=>reject(req.error);
+      });
+    }
+
+    // Lightweight IDB helper: callback receives store and should return request (get/put/delete/openCursor)
+    function idbAction(storeName, mode, callback){
+      return new Promise((resolve,reject)=>{
+        try {
+          const tx = db.transaction([storeName], mode);
+          const store = tx.objectStore(storeName);
+          const req = callback(store);
+          req.onsuccess = ()=>resolve(req.result);
+          req.onerror = ()=>reject(req.error);
+        } catch (err) {
+          reject(err);
+        }
+      });
+    }
+
+    // ======= Utilities =======
+    const $ = sel => document.querySelector(sel);
+    const grid = $('#videoGrid');
+    const toastEl = $('#toast');
+    function toast(msg){
+      toastEl.textContent = msg; toastEl.classList.add('show');
+      setTimeout(()=>toastEl.classList.remove('show'), 1600);
+    }
+
+    function formatBytes(bytes){
+      if(bytes < 1024) return bytes + ' B';
+      let kb = bytes/1024; if(kb < 1024) return kb.toFixed(2)+' KB';
+      let mb = kb/1024; if(mb < 1024) return mb.toFixed(2)+' MB';
+      let gb = mb/1024; return gb.toFixed(2)+' GB';
+    }
+
+    // Generate a thumbnail dataURL from a video File/Blob
+    async function createThumbnail(file){
+      return new Promise((resolve)=>{
+        const url = URL.createObjectURL(file);
+        const v = document.createElement('video');
+        v.preload = 'metadata';
+        v.src = url;
+        v.muted = true;
+        v.crossOrigin = 'anonymous';
+        const cleanup = ()=>{ try{ URL.revokeObjectURL(url); }catch(e){} };
+        v.addEventListener('loadeddata', ()=>{
+          const capture = ()=>{
+            try{
+              const canvas = document.createElement('canvas');
+              const w = 640;
+              const h = Math.round(w * (v.videoHeight/v.videoWidth || 9/16));
+              canvas.width = w; canvas.height = h;
+              const ctx = canvas.getContext('2d');
+              ctx.drawImage(v, 0, 0, w, h);
+              const dataURL = canvas.toDataURL('image/jpeg', .75);
+              cleanup();
+              resolve({ dataURL, w, h });
+            } catch(err){
+              cleanup();
+              resolve({ dataURL:null, w:0, h:0 });
+            }
+          };
+          // try to seek to .5s to avoid black frames
+          try {
+            v.currentTime = Math.min(.5, v.duration || .5);
+            v.addEventListener('seeked', capture, { once:true });
+            // safety fallback
+            setTimeout(capture, 700);
+          } catch(e){
+            capture();
+          }
+        }, { once:true });
+        // fallback if loadeddata never fires
+        setTimeout(()=>resolve({ dataURL:null,w:0,h:0 }), 4000);
+      });
+    }
+
+    // ======= Auth helpers =======
+    let currentUser = null; // { email, role }
+    let isRegister = false;
+
+    async function sha256(text){
+      const enc = new TextEncoder();
+      const buf = await crypto.subtle.digest('SHA-256', enc.encode(text));
+      return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+    }
+
+    async function saveUser(user){
+      // user: { email, pass (hashed), role, createdAt }
+      return idbAction(USER_STORE, 'readwrite', s => s.put(user));
+    }
+    async function getUser(email){
+      return idbAction(USER_STORE, 'readonly', s => s.get(email));
+    }
+    async function ensureAdminDemo(){
+      const existing = await getUser('admin@flixnet.com');
+      if(!existing){
+        await saveUser({ email:'admin@flixnet.com', pass: await sha256('admin123'), role:'admin', createdAt: Date.now() });
+      }
+    }
+
+    function setAuthMode(registerMode){
+      isRegister = registerMode;
+      $('#authTitle').textContent = isRegister ? 'Register' : 'Login';
+      $('#authSubmit').textContent = isRegister ? 'Create account' : 'Login';
+      $('#toggleMode').textContent = isRegister ? 'Switch to Login' : 'Switch to Register';
+    }
+
+    // ======= Video CRUD =======
+    async function addVideo(record){
+      // record contains blob (ArrayBuffer) currently; we store it directly (small demo). In production, consider file handles / cache.
+      return idbAction(VIDEO_STORE, 'readwrite', s => s.put(record));
+    }
+    async function getVideoById(id){
+      return idbAction(VIDEO_STORE, 'readonly', s => s.get(id));
+    }
+    async function deleteVideo(id){
+      return idbAction(VIDEO_STORE, 'readwrite', s => s.delete(id));
+    }
+
+    // ======= Rendering & Pagination =======
+    const PAGE_SIZE = 12;
+    let pageOffset = 0;
+    let lastQuery = '';
+
+    async function listVideosPage({ append=false } = {}){
+      const q = $('#searchInput').value.trim().toLowerCase();
+      const firstPage = !append || q !== lastQuery;
+      if(firstPage){
+        pageOffset = 0;
+        grid.innerHTML = '';
+        $('#emptyState').style.display = 'none';
+      }
+      lastQuery = q;
+
+      // iterate newest-first using createdAt index
+      const tx = db.transaction([VIDEO_STORE], 'readonly');
+      const store = tx.objectStore(VIDEO_STORE);
+      let idx;
+      try {
+        idx = store.index('createdAt');
+      } catch(e) {
+        // if no index, list all
+        idx = store;
+      }
+
+      let shown = 0;
+      let skipped = 0;
+      let added = 0;
+
+      return new Promise((resolve)=>{
+        const direction = 'prev'; // newest first
+        const request = (idx.openCursor) ? idx.openCursor(null, direction) : store.openCursor(null, direction);
+        request.onsuccess = (ev)=>{
+          const cursor = ev.target.result;
+          if(!cursor){
+            $('#loadMore').style.display = added === PAGE_SIZE ? 'block' : 'none';
+            if(!grid.children.length) $('#emptyState').style.display = 'block';
+            return resolve();
+          }
+          const v = cursor.value;
+          const hay = (v.title_lc || '') + '\n' + (v.category_lc || '');
+          const ok = !q || hay.includes(q);
+          if(ok){
+            if(skipped < pageOffset){ skipped++; return cursor.continue(); }
+            if(shown < PAGE_SIZE){
+              renderCard(v);
+              shown++; added++;
+              return cursor.continue();
+            }
+            // page filled
+            $('#loadMore').style.display = 'block';
+            return resolve();
+          }
+          cursor.continue();
+        };
+        request.onerror = ()=>resolve();
+      });
+    }
+
+    // small in-memory object URL cache to avoid regenerating
+    const urlCache = new Map();
+
+    function renderCard(v){
+      const card = document.createElement('div');
+      card.className = 'card';
+
+      const thumb = document.createElement('div');
+      thumb.className = 'thumb';
+      if(v.thumb) thumb.style.backgroundImage = `url(${v.thumb})`;
+      else thumb.style.background = '#000';
+
+      const meta = document.createElement('div');
+      meta.className = 'meta';
+
+      const title = document.createElement('div');
+      title.className = 'title';
+      title.textContent = v.title || 'Untitled';
+
+      const sub = document.createElement('div');
+      sub.className = 'sub';
+      sub.textContent = `${formatBytes(v.size || 0)} • ${v.category || 'Uncategorized'}`;
+
+      const row = document.createElement('div');
+      row.className = 'row';
+      row.style.display = 'flex';
+      row.style.gap = '8px';
+      row.style.marginTop = '8px';
+
+      const play = document.createElement('button');
+      play.className = 'btn btn-accent';
+      play.textContent = 'Play';
+      play.onclick = async ()=>{
+        const rec = await getVideoById(v.id);
+        if(!rec || !rec.blob){ return toast('Video data missing'); }
+        let url = urlCache.get(v.id);
+        if(!url){
+          // rec.blob stored as ArrayBuffer — wrap with proper mime
+          const blob = new Blob([rec.blob], { type: rec.type || 'video/mp4' });
+          url = URL.createObjectURL(blob);
+          urlCache.set(v.id, url);
+        }
+        const player = $('#player');
+        player.src = url;
+        $('#playerModal').style.display = 'flex';
+        $('#playerModal').setAttribute('aria-hidden','false');
+      };
+
+      row.appendChild(play);
+
+      const canDelete = currentUser && (currentUser.role === 'admin' || currentUser.email === v.uploader);
+      if(canDelete){
+        const del = document.createElement('button');
+        del.className = 'btn';
+        del.textContent = 'Delete';
+        del.onclick = async ()=>{
+          await deleteVideo(v.id);
+          const u = urlCache.get(v.id);
+          if(u){ URL.revokeObjectURL(u); urlCache.delete(v.id); }
+          card.remove();
+          toast('Deleted');
+          // optional: refresh if needed
+        };
+        row.appendChild(del);
+      }
+
+      meta.appendChild(title);
+      meta.appendChild(sub);
+      meta.appendChild(row);
+
+      card.appendChild(thumb);
+      card.appendChild(meta);
+      grid.appendChild(card);
+    }
+
+    // ======= Event wiring & UI logic =======
+    $('#loadMore').addEventListener('click', async ()=>{
+      pageOffset += PAGE_SIZE;
+      await listVideosPage({ append:true });
+    });
+
+    // Debounce helper
+    function debounce(fn, delay=250){
+      let t;
+      return (...args)=>{
+        clearTimeout(t);
+        t = setTimeout(()=>fn(...args), delay);
+      };
+    }
+
+    $('#searchInput').addEventListener('input', debounce(()=>listVideosPage({ append:false }), 220));
+
+    // Player modal: close when background clicked or press Esc
+    $('#playerModal').addEventListener('click', (e)=>{
+      if(e.target.id === 'playerModal'){
+        $('#playerModal').style.display = 'none';
+        $('#playerModal').setAttribute('aria-hidden','true');
+        const p = $('#player'); p.pause(); p.removeAttribute('src'); // free resource
+      }
+    });
+
+    document.addEventListener('keydown', (e)=>{
+      if(e.key === 'Escape'){
+        // Close player
+        if($('#playerModal').style.display === 'flex'){
+          $('#playerModal').style.display = 'none';
+          $('#playerModal').setAttribute('aria-hidden','true');
+          const p = $('#player'); p.pause(); p.removeAttribute('src');
+        }
+        // Close upload/auth modals if open
+        if($('#uploadModal').style.display === 'flex'){ $('#uploadModal').style.display = 'none'; $('#uploadModal').setAttribute('aria-hidden','true'); }
+        if($('#authModal').style.display === 'flex'){ $('#authModal').style.display = 'none'; $('#authModal').setAttribute('aria-hidden','true'); }
+      }
+    });
+
+    // Upload modal toggles
+    $('#uploadBtn').addEventListener('click', ()=>{
+      $('#uploadModal').style.display = 'flex';
+      $('#uploadModal').setAttribute('aria-hidden','false');
+    });
+    $('#closeUpload').addEventListener('click', ()=>{
+      $('#uploadModal').style.display = 'none';
+      $('#uploadModal').setAttribute('aria-hidden','true');
+    });
+
+    // Auth modal toggles
+    $('#loginBtn').addEventListener('click', ()=>{
+      $('#authModal').style.display = 'flex';
+      $('#authModal').setAttribute('aria-hidden','false');
+    });
+    $('#closeAuth').addEventListener('click', ()=>{
+      $('#authModal').style.display = 'none';
+      $('#authModal').setAttribute('aria-hidden','true');
+    });
+
+    $('#toggleMode').addEventListener('click', ()=> setAuthMode(!isRegister) );
+
+    // Auth submit
+    $('#authForm').addEventListener('submit', async (e)=>{
+      e.preventDefault();
+      const email = $('#authEmail').value.trim().toLowerCase();
+      const pass = $('#authPass').value;
+      if(!email || !pass) return;
+      const hashed = await sha256(pass);
+      if(isRegister){
+        const existing = await getUser(email);
+        if(existing){ return toast('User already exists'); }
+        await saveUser({ email, pass: hashed, role: 'user', createdAt: Date.now() });
+        toast('Account created. You can login now.');
+        setAuthMode(false);
+      } else {
+        const user = await getUser(email);
+        if(!user || user.pass !== hashed){ return toast('Invalid credentials'); }
+        currentUser = { email: user.email, role: user.role };
+        $('#authModal').style.display = 'none';
+        $('#authModal').setAttribute('aria-hidden','true');
+        $('#loginBtn').style.display = 'none';
+        $('#logoutBtn').style.display = 'inline-block';
+        $('#uploadBtn').style.display = 'inline-block';
+        toast('Welcome ' + currentUser.email);
+        await listVideosPage({ append:false });
+      }
+    });
+
+    // Logout
+    $('#logoutBtn').addEventListener('click', ()=>{
+      currentUser = null;
+      $('#loginBtn').style.display = 'inline-block';
+      $('#logoutBtn').style.display = 'none';
+      $('#uploadBtn').style.display = 'none';
+      toast('Logged out');
+      listVideosPage({ append:false });
+    });
+
+    // Upload form submit
+    $('#uploadForm').addEventListener('submit', async (e)=>{
+      e.preventDefault();
+      const file = $('#videoFile').files[0];
+      if(!file) return toast('Pick a file');
+      // Create thumbnail
+      const thumbObj = await createThumbnail(file);
+      // Read file as ArrayBuffer (store small demos). For big videos consider FileSystemAccess or Cache API.
+      const buffer = await file.arrayBuffer();
+      const titleRaw = ($('#videoTitle').value.trim() || file.name);
+      const rec = {
+        id: String(Date.now()) + '-' + Math.random().toString(36).slice(2,8),
+        title: titleRaw,
+        title_lc: titleRaw.toLowerCase(),
+        description: $('#videoDesc').value.trim(),
+        category: $('#videoCat').value.trim(),
+        category_lc: ($('#videoCat').value.trim()).toLowerCase(),
+        uploader: currentUser ? currentUser.email : 'guest',
+        size: file.size,
+        type: file.type || 'video/mp4',
+        thumb: thumbObj.dataURL,   // small JPEG dataURL
+        blob: buffer,              // ArrayBuffer of the video
+        createdAt: Date.now()
+      };
+      await addVideo(rec);
+      $('#uploadModal').style.display = 'none';
+      $('#uploadModal').setAttribute('aria-hidden','true');
+      e.target.reset();
+      toast('Uploaded');
+      await listVideosPage({ append:false });
+    });
+
+    // Clean up object URLs on page unload
+    window.addEventListener('beforeunload', ()=>{
+      for(const u of urlCache.values()) try{ URL.revokeObjectURL(u); }catch(e){}
+      urlCache.clear();
+    });
+
+    // ======= Boot =======
+    (async function init(){
+      await openDB();
+      await ensureAdminDemo();
+      // initial list
+      await listVideosPage({ append:false });
+      // Note: keep upload/login hidden until user logs in
+      $('#uploadBtn').style.display = 'none';
+      $('#logoutBtn').style.display = 'none';
+      // keyboard accessibility: focus first input on auth open
+      $('#authModal').addEventListener('transitionend', ()=>{ $('#authEmail').focus(); });
+    })();
+
+  })();
+  </script>
+</body>
+</html>
